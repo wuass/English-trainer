@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -34,7 +34,7 @@ h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute
 .up{color:var(--good)} .down{color:var(--bad)}
 svg text{fill:var(--muted);font-size:11px}
 .bars{display:flex;flex-direction:column;gap:6px}
-.bar{display:grid;grid-template-columns:112px 1fr 44px;align-items:center;gap:8px;font-size:14px}
+.bar{display:grid;grid-template-columns:120px 1fr 52px;align-items:center;gap:8px;font-size:14px}
 .bar i{display:block;height:8px;border-radius:4px;background:var(--accent)}
 .bar em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
 .tiles{display:grid;gap:8px}
@@ -47,9 +47,7 @@ button.btn{border:0;border-radius:10px;padding:12px 16px;font:600 16px/1 inherit
 button.ghost{background:var(--bg2);color:var(--fg)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .row .btn{flex:1}
-.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
-.chip{border:0;border-radius:16px;padding:6px 12px;background:var(--bg);color:var(--fg);font:14px inherit;font-family:inherit;white-space:nowrap;cursor:pointer}
-.chip.on{background:var(--accent);color:var(--accent-fg)}
+.webback{align-self:flex-start;border:0;background:none;color:var(--link);font:inherit;font-size:16px;padding:4px 0;cursor:pointer}
 .prompt{font-size:19px;line-height:1.4}
 .ctx{font-size:14px;color:var(--muted);margin-top:6px}
 input.ans,textarea.ans{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:17px;background:var(--bg);color:var(--fg)}
@@ -63,35 +61,40 @@ input.ans:focus,textarea.ans:focus{outline:none;border-color:var(--accent)}
 .progress{height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
 .progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
 .stack{display:flex;flex-direction:column;gap:12px}
-details summary{cursor:pointer;color:var(--link)}
-.lesson{padding:8px 0;border-top:1px solid var(--line);font-size:14px}
-.lesson b{font-variant-numeric:tabular-nums}
+.list .it{display:flex;justify-content:space-between;gap:8px;padding:10px 0;border-top:1px solid var(--line);font-size:14px;cursor:pointer}
+.list .it:first-of-type{border-top:0}
+.list .it b{font-variant-numeric:tabular-nums}
+.list .it .go{color:var(--muted)}
+.words{display:flex;flex-wrap:wrap;gap:6px}
+.words span{background:var(--bg2);border-radius:8px;padding:3px 8px;font-size:14px}
 [hidden]{display:none!important}
 </style>
 </head>
 <body>
-<main id="app"><div class="card muted">Загружаю…</div></main>
+<main id="app"><div class="card muted">Loading…</div></main>
 <script>
 "use strict";
-var tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData !== undefined ? Telegram.WebApp : null;
+var tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); }
-var NEW_PER_DAY = 10, SESSION = 20, INTERVALS = [0, 1, 3, 7, 16, 35, 90];
-var CATS = {tense:"Времена",verb:"Форма глагола",article:"Артикли",prep:"Предлоги",order:"Порядок слов",pron:"Местоимения",number:"Число",word:"Выбор слова",redun:"Лишние слова",mean:"Смысл",quest:"Вопросы",disc:"Связность"};
-var MCATS = {"tense":"Времена","verb form":"Форма глагола","preposition":"Предлоги","article":"Артикли","word choice":"Выбор слова","redundancy":"Лишние слова","pronoun":"Местоимения","question":"Вопросы"};
+var NEW_PER_DAY = 10, SESSION = 20, INTERVALS = [0, 1, 3, 7, 16, 35, 90], LEARNED_BOX = 3;
+var CATS = {tense:"Tense",verb:"Verb form",article:"Articles",prep:"Prepositions",order:"Word order",pron:"Pronouns",number:"Singular/plural",word:"Word choice",redun:"Extra words",mean:"Meaning",quest:"Questions",disc:"Linking"};
+var MCATS = {"tense":"Tense","verb form":"Verb form","preposition":"Prepositions","article":"Articles","word choice":"Word choice","redundancy":"Extra words","pronoun":"Pronouns","question":"Questions"};
 var D, S, app = document.getElementById("app");
 
 /* ---------- storage: Telegram CloudStorage, fallback localStorage ---------- */
 var cloud = tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9") ? tg.CloudStorage : null;
+function fresh() { return {cards:{}, days:{}, cat:{}, log:[]}; }
 function loadState(cb) {
-  var empty = {cards:{}, days:{}};
-  function parse(s) { try { var o = JSON.parse(s); return o && o.cards ? o : empty; } catch (e) { return empty; } }
-  if (!cloud) { var s = null; try { s = localStorage.getItem("st"); } catch (e) {} return cb(s ? parse(s) : empty); }
+  function parse(s) {
+    try { var o = JSON.parse(s); if (!o || !o.cards) return fresh(); o.days = o.days || {}; o.cat = o.cat || {}; o.log = o.log || []; return o; } catch (e) { return fresh(); }
+  }
+  if (!cloud) { var s = null; try { s = localStorage.getItem("st"); } catch (e) {} return cb(s ? parse(s) : fresh()); }
   cloud.getItem("stn", function (err, n) {
     n = parseInt(n || "0", 10);
-    if (err || !n) return cb(empty);
+    if (err || !n) return cb(fresh());
     var keys = []; for (var i = 0; i < n; i++) keys.push("st" + i);
     cloud.getItems(keys, function (err2, vals) {
-      if (err2 || !vals) return cb(empty);
+      if (err2 || !vals) return cb(fresh());
       cb(parse(keys.map(function (k) { return vals[k] || ""; }).join("")));
     });
   });
@@ -110,15 +113,16 @@ function saveState() {
 
 /* ---------- helpers ---------- */
 function today() { var d = new Date(); return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 864e5); }
-function ymd() { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function ymd(off) { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000 - (off || 0) * 864e5).toISOString().slice(0, 10); }
 function el(tag, attrs, kids) {
   var n = document.createElement(tag);
   for (var k in attrs || {}) { if (k === "text") n.textContent = attrs[k]; else if (k === "html") n.innerHTML = attrs[k]; else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== false && attrs[k] != null) n.setAttribute(k, attrs[k]); }
   (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
   return n;
 }
-function fmt(d) { return new Date(d + "T00:00:00").toLocaleDateString("ru-RU", {day: "numeric", month: "short"}); }
+function fmt(d) { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", {day: "numeric", month: "short"}); }
 function pct(l) { return Math.round(100 * l.clean / l.sent); }
+function rate(ok, a) { return a ? Math.round(100 * ok / a) + "%" : "—"; }
 function norm(s) { return s.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9'\s-]/g, " ").replace(/\s+/g, " ").trim(); }
 function lev(a, b) {
   var m = a.length, n = b.length, d = []; for (var i = 0; i <= m; i++) { d[i] = [i]; }
@@ -128,33 +132,62 @@ function lev(a, b) {
 }
 function haptic(t) { try { tg && tg.HapticFeedback.notificationOccurred(t); } catch (e) {} }
 function splitCtx(s) { var m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/); return m ? [m[1], m[2]] : [s, ""]; }
+function shuffle(a) { return a.slice().sort(function () { return Math.random() - .5; }); }
+function openUrl(u) { var abs = new URL(u, location.href).href; if (tg && tg.openLink) tg.openLink(abs); else window.open(abs, "_blank"); }
 
-/* ---------- spaced repetition ---------- */
+/* ---------- spaced repetition + stats ---------- */
 function card(id) { return S.cards[id]; }               // [box, due, right, wrong]
 function isDue(id) { var c = card(id); return c && c[1] <= today(); }
 function isNew(id) { return !card(id); }
 function newLeft(kind) { var k = ymd() + ":" + kind; return Math.max(0, NEW_PER_DAY - ((S.days[k] || {}).n || 0)); }
-function grade(id, kind, ok) {
-  var c = card(id), t = today();
+function bump(o, ok) { o[0] = (o[0] || 0) + 1; if (ok) o[1] = (o[1] || 0) + 1; }
+function grade(item, kind, ok) {
+  var id = item.id, c = card(id), t = today();
   if (!c) { c = S.cards[id] = [0, t, 0, 0]; var k = ymd() + ":" + kind; S.days[k] = S.days[k] || {}; S.days[k].n = (S.days[k].n || 0) + 1; }
   if (ok) { c[0] = Math.min(c[0] + 1, INTERVALS.length - 1); c[2]++; } else { c[0] = 0; c[3]++; }
   c[1] = t + INTERVALS[c[0]];
-  var dk = ymd(); S.days[dk] = S.days[dk] || {a: 0, ok: 0}; S.days[dk].a = (S.days[dk].a || 0) + 1; if (ok) S.days[dk].ok = (S.days[dk].ok || 0) + 1;
+  var dk = ymd(), d = S.days[dk] = S.days[dk] || {};
+  d.a = (d.a || 0) + 1; if (ok) d.ok = (d.ok || 0) + 1;
+  d[kind] = d[kind] || [0, 0]; bump(d[kind], ok);
+  if (kind === "m") { S.cat[item.cat] = S.cat[item.cat] || [0, 0]; bump(S.cat[item.cat], ok); }
   saveState();
 }
 function buildQueue(items, kind) {
   var due = items.filter(function (x) { return isDue(x.id); }).sort(function (a, b) { return card(a.id)[1] - card(b.id)[1]; });
-  var fresh = items.filter(function (x) { return isNew(x.id); }).slice(0, newLeft(kind));
-  return due.concat(fresh).slice(0, SESSION);
+  var fr = items.filter(function (x) { return isNew(x.id); }).slice(0, newLeft(kind));
+  return due.concat(fr).slice(0, SESSION);
+}
+function totals() {
+  var a = 0, ok = 0, days = 0;
+  Object.keys(S.days).forEach(function (k) { if (k.length === 10 && S.days[k].a) { a += S.days[k].a; ok += S.days[k].ok || 0; days++; } });
+  var streak = 0, i = (S.days[ymd()] || {}).a ? 0 : 1;
+  while ((S.days[ymd(i)] || {}).a) { streak++; i++; }
+  return {a: a, ok: ok, days: days, streak: streak};
+}
+function deck(items) {
+  var r = {learned: 0, learning: 0, fresh: 0};
+  items.forEach(function (x) { var c = card(x.id); if (!c) r.fresh++; else if (c[0] >= LEARNED_BOX) r.learned++; else r.learning++; });
+  return r;
 }
 
 /* ---------- navigation ---------- */
+var backFn = null;
 function setBack(fn) {
-  if (!tg) return;
-  tg.BackButton.offClick(setBack._fn || function () {});
-  if (fn) { setBack._fn = fn; tg.BackButton.onClick(fn); tg.BackButton.show(); } else tg.BackButton.hide();
+  if (tg && tg.BackButton) {
+    if (backFn) tg.BackButton.offClick(backFn);
+    if (fn) { tg.BackButton.onClick(fn); tg.BackButton.show(); } else tg.BackButton.hide();
+  }
+  backFn = fn;
 }
-function render(nodes) { app.innerHTML = ""; nodes.forEach(function (n) { if (n) app.appendChild(n); }); window.scrollTo(0, 0); }
+function render(nodes) {
+  app.innerHTML = "";
+  if (!tg && backFn) app.appendChild(el("button", {class: "webback", text: "‹ Back", onclick: backFn}));
+  nodes.forEach(function (n) { if (n) app.appendChild(n); });
+  window.scrollTo(0, 0);
+}
+function tile(title, sub, n, fn, off) {
+  return el("button", {class: "tile", onclick: fn, disabled: off ? "disabled" : false}, [el("div", {}, [el("b", {text: title}), el("span", {class: "muted small", text: sub})]), el("span", {class: "cnt", text: n})]);
+}
 
 /* ---------- home ---------- */
 function home() {
@@ -162,12 +195,12 @@ function home() {
   var L = D.lessons, full = L.filter(function (l) { return l.e; }), last = full[full.length - 1], prev = full[full.length - 2];
   var end = L[L.length - 1], best = L.reduce(function (a, b) { return pct(b) > pct(a) ? b : a; });
   var dlt = pct(last) - pct(prev);
-  var dayKey = ymd(), td = S.days[dayKey] || {};
+  var td = S.days[ymd()] || {}, T = totals();
 
   var kpis = el("div", {class: "kpis"}, [
-    el("div", {class: "kpi"}, [el("b", {text: pct(end) + "%"}), el("span", {text: "чистых " + fmt(end.date)}), el("div", {class: "small " + (dlt >= 0 ? "up" : "down"), text: (dlt >= 0 ? "▲ +" : "▼ ") + dlt + " п.п."})]),
-    el("div", {class: "kpi"}, [el("b", {text: pct(best) + "%"}), el("span", {text: "рекорд, " + fmt(best.date)})]),
-    el("div", {class: "kpi"}, [el("b", {text: String(td.a || 0)}), el("span", {text: "ответов сегодня" + (td.a ? ", верно " + Math.round(100 * (td.ok || 0) / td.a) + "%" : "")})])
+    el("div", {class: "kpi"}, [el("b", {text: pct(end) + "%"}), el("span", {text: "clean, " + fmt(end.date)}), el("div", {class: "small " + (dlt >= 0 ? "up" : "down"), text: (dlt >= 0 ? "▲ +" : "▼ ") + dlt + " pp"})]),
+    el("div", {class: "kpi"}, [el("b", {text: pct(best) + "%"}), el("span", {text: "best, " + fmt(best.date)})]),
+    el("div", {class: "kpi"}, [el("b", {text: String(td.a || 0)}), el("span", {text: "answers today" + (td.a ? ", " + rate(td.ok || 0, td.a) + " right" : "")})])
   ]);
 
   // accuracy chart
@@ -181,34 +214,100 @@ function home() {
   L.forEach(function (x, i) { svg += '<circle cx="' + X(x.date) + '" cy="' + Y(pct(x)) + '" r="' + (i === L.length - 1 ? 4 : 2.5) + '" fill="var(--accent)"/>'; });
   svg += '<text x="' + l0 + '" y="' + (H - 4) + '">' + fmt(L[0].date) + '</text><text x="' + (W - r0) + '" y="' + (H - 4) + '" text-anchor="end">' + fmt(end.date) + '</text></svg>';
 
-  // top errors of last lesson
-  var top = Object.keys(last.e).sort(function (a, b) { return last.e[b] - last.e[a]; }).slice(0, 5), mx = last.e[top[0]] || 1;
-  var bars = el("div", {class: "bars"}, top.map(function (k) {
-    var dv = last.e[k] - prev.e[k];
-    return el("div", {class: "bar"}, [el("span", {text: CATS[k]}), el("i", {style: "width:" + (100 * last.e[k] / mx) + "%"}), el("em", {class: dv < 0 ? "up" : dv > 0 ? "down" : "", text: last.e[k] + (dv ? (dv > 0 ? " ▲" : " ▼") : "")})]);
+  var vDue = buildQueue(D.vocab, "v").length, mDue = buildQueue(D.mistakes, "m").length;
+  var lessonsList = el("div", {class: "list"}, L.slice().reverse().map(function (l) {
+    return el("div", {class: "it", onclick: function () { lesson(L.indexOf(l)); }}, [
+      el("div", {}, [el("b", {text: fmt(l.date) + " · " + pct(l) + "% (" + l.clean + "/" + l.sent + ")"}), el("div", {class: "muted", text: l.summary || ""})]),
+      el("span", {class: "go", text: "›"})]);
   }));
 
-  var vDue = buildQueue(D.vocab, "v").length, mDue = buildQueue(D.mistakes, "m").length;
-  function tile(title, sub, n, fn, off) {
-    return el("button", {class: "tile", onclick: fn, disabled: off ? "disabled" : false}, [el("div", {}, [el("b", {text: title}), el("span", {class: "muted small", text: sub})]), el("span", {class: "cnt", text: n})]);
-  }
-  var lessonsList = el("details", {}, [el("summary", {text: "Все уроки (" + L.length + ")"})].concat(L.slice().reverse().map(function (l) {
-    return el("div", {class: "lesson"}, [el("b", {text: fmt(l.date) + " · " + pct(l) + "% (" + l.clean + "/" + l.sent + ")"}), el("div", {class: "muted", text: l.summary || ""})]);
-  })));
-
   render([
-    el("div", {class: "card"}, [el("h1", {text: "English with Sam"}), el("div", {class: "muted small", text: L.length + " уроков · данные на " + fmt(D.updated)})]),
+    el("div", {class: "card"}, [el("h1", {text: "English with Sam"}), el("div", {class: "muted small", text: L.length + " lessons · data as of " + fmt(D.updated)})]),
     el("div", {class: "card"}, [kpis]),
-    el("div", {class: "card"}, [el("h2", {text: "Доля чистых предложений"}), el("div", {html: svg}),
-      end.long ? el("div", {class: "small muted", text: "Длинные фразы на последнем уроке: " + Math.round(100 * end.long.clean / end.long.sent) + "% (" + end.long.clean + "/" + end.long.sent + ")"}) : null]),
-    el("div", {class: "card"}, [el("h2", {text: "Главные ошибки " + fmt(last.date)}), bars]),
-    last.goal ? el("div", {class: "card"}, [el("h2", {text: "Цель от Сэма"}), el("div", {text: last.goal})]) : null,
+    el("div", {class: "card"}, [el("h2", {text: "Clean sentences"}), el("div", {html: svg}),
+      end.long ? el("div", {class: "small muted", text: "Long sentences, last lesson: " + Math.round(100 * end.long.clean / end.long.sent) + "% (" + end.long.clean + "/" + end.long.sent + ")"}) : null]),
+    el("div", {class: "card"}, [el("h2", {text: "Top mistakes, " + fmt(last.date)}), errBars(last, prev, 5)]),
+    last.goal ? el("div", {class: "card"}, [el("h2", {text: "Sam's goal"}), el("div", {text: last.goal})]) : null,
     el("div", {class: "tiles"}, [
-      tile("Исправь ошибку", "твои фразы с уроков", mDue ? mDue + " сегодня" : "готово ✓", function () { mistakesMenu(); }),
-      tile("Новые слова", D.vocab.length + " слов из словарей", vDue ? vDue + " сегодня" : "готово ✓", function () { startSession("v", buildQueue(D.vocab, "v"), "Новые слова"); }),
-      tile("Синонимы", D.synonyms.length ? D.synonyms.length + " пар" : "появятся с новыми отчётами Сэма", D.synonyms.length ? "→" : "скоро", function () {}, !D.synonyms.length)
+      tile("Fix the mistake", "your sentences from lessons", mDue ? mDue + " today" : "done ✓", mistakesMenu),
+      tile("New words", D.vocab.length + " words from the reports", vDue ? vDue + " today" : "done ✓", function () { startSession("v", buildQueue(D.vocab, "v"), "New words", home); }),
+      tile("Synonyms", D.synonyms.length ? D.synonyms.length + " pairs" : "coming with Sam's next reports", D.synonyms.length ? "→" : "soon", function () {}, !D.synonyms.length),
+      tile("My practice", T.a ? T.a + " answers, " + rate(T.ok, T.a) + " right" + (T.streak ? " · streak " + T.streak + "d" : "") : "your exercise stats", "→", practice)
     ]),
-    el("div", {class: "card"}, [lessonsList])
+    el("div", {class: "card"}, [el("h2", {text: "All lessons (" + L.length + ")"}), lessonsList])
+  ]);
+}
+
+function errBars(l, p, n) {
+  var keys = Object.keys(l.e).filter(function (k) { return l.e[k] > 0; }).sort(function (a, b) { return l.e[b] - l.e[a]; }).slice(0, n || 99);
+  var mx = l.e[keys[0]] || 1;
+  return el("div", {class: "bars"}, keys.map(function (k) {
+    var dv = p && p.e ? l.e[k] - (p.e[k] || 0) : 0;
+    return el("div", {class: "bar"}, [el("span", {text: CATS[k] || k}), el("i", {style: "width:" + (100 * l.e[k] / mx) + "%"}),
+      el("em", {class: dv < 0 ? "up" : dv > 0 ? "down" : "", text: l.e[k] + (dv ? (dv > 0 ? " ▲" : " ▼") : "")})]);
+  }));
+}
+
+/* ---------- one lesson ---------- */
+function lesson(i) {
+  setBack(home);
+  var L = D.lessons, l = L[i], p = null;
+  for (var j = i - 1; j >= 0; j--) if (L[j].e) { p = L[j]; break; }
+  var words = D.vocab.filter(function (v) { return v.date === l.date; });
+  var errs = l.e ? Object.keys(l.e).reduce(function (s, k) { return s + l.e[k]; }, 0) : null;
+  var prevAll = i > 0 ? L[i - 1] : null, dlt = prevAll ? pct(l) - pct(prevAll) : null;
+  render([
+    el("div", {class: "card"}, [el("h1", {text: "Lesson " + fmt(l.date)}), el("div", {class: "muted small", text: l.summary || ""})]),
+    el("div", {class: "card"}, [el("div", {class: "kpis"}, [
+      el("div", {class: "kpi"}, [el("b", {text: pct(l) + "%"}), el("span", {text: "clean"}), dlt != null ? el("div", {class: "small " + (dlt >= 0 ? "up" : "down"), text: (dlt >= 0 ? "▲ +" : "▼ ") + dlt + " pp"}) : null]),
+      el("div", {class: "kpi"}, [el("b", {text: String(l.sent)}), el("span", {text: l.clean + " clean, " + (l.sent - l.clean) + " with a mistake"})]),
+      el("div", {class: "kpi"}, [el("b", {text: l.fixed != null ? String(l.fixed) : "—"}), el("span", {text: "self-corrections"})])
+    ]), l.long ? el("div", {class: "small muted", style: "margin-top:10px", text: "Long sentences: " + Math.round(100 * l.long.clean / l.long.sent) + "% (" + l.long.clean + "/" + l.long.sent + ")"}) : null]),
+    l.e ? el("div", {class: "card"}, [el("h2", {text: "Mistakes by type (" + errs + ")" + (p ? ", vs " + fmt(p.date) : "")}), errBars(l, p)]) : null,
+    l.goal ? el("div", {class: "card"}, [el("h2", {text: "Sam's goal"}), el("div", {text: l.goal})]) : null,
+    words.length ? el("div", {class: "card stack"}, [el("h2", {text: "Words (" + words.length + ")"}),
+      el("div", {class: "words"}, words.map(function (v) { return el("span", {text: v.word}); })),
+      el("button", {class: "btn ghost", text: "Practice these words", onclick: function () { startSession("v", shuffle(words).slice(0, SESSION), "Words, " + fmt(l.date), function () { lesson(i); }); }})]) : null,
+    l.pdf ? el("button", {class: "btn", text: "Open full report (PDF)", onclick: function () { openUrl(l.pdf); }}) : el("div", {class: "card muted small", text: "No PDF report for this lesson."})
+  ]);
+}
+
+/* ---------- my practice ---------- */
+function practice() {
+  setBack(home);
+  var T = totals(), vd = deck(D.vocab), md = deck(D.mistakes), N = 14;
+  var days = []; for (var i = N - 1; i >= 0; i--) days.push(ymd(i));
+  var mx = Math.max.apply(null, days.map(function (d) { return (S.days[d] || {}).a || 0; }).concat([5]));
+  var W = 320, H = 110, bw = (W - 20) / N, svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">';
+  days.forEach(function (d, k) {
+    var o = S.days[d] || {}, a = o.a || 0, ok = o.ok || 0, x = 10 + k * bw, h = (H - 24) * a / mx, ho = (H - 24) * ok / mx;
+    svg += '<rect x="' + (x + 2) + '" y="' + (H - 20 - h) + '" width="' + (bw - 4) + '" height="' + h + '" rx="2" fill="var(--bad)" opacity=".55"/>';
+    svg += '<rect x="' + (x + 2) + '" y="' + (H - 20 - ho) + '" width="' + (bw - 4) + '" height="' + ho + '" rx="2" fill="var(--good)"/>';
+    if (k % 3 === 1 || k === N - 1) svg += '<text x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle">' + fmt(d).replace(" ", " ") + '</text>';
+  });
+  svg += '</svg>';
+  function deckRow(name, d, total) {
+    return el("div", {class: "bar"}, [el("span", {text: name}), el("i", {style: "width:" + (100 * d.learned / Math.max(1, total)) + "%;background:var(--good)"}), el("em", {text: d.learned + "/" + total})]);
+  }
+  var catKeys = Object.keys(S.cat).sort(function (a, b) { return S.cat[b][0] - S.cat[a][0]; });
+  var log = S.log.slice(-10).reverse();
+  render([
+    el("div", {class: "card"}, [el("h1", {text: "My practice"}), el("div", {class: "muted small", text: cloud ? "Saved to your Telegram account, the same on phone and desktop." : "Browser version: saved in this browser only, separate from Telegram."})]),
+    el("div", {class: "card"}, [el("div", {class: "kpis"}, [
+      el("div", {class: "kpi"}, [el("b", {text: String(T.a)}), el("span", {text: "answers in total"})]),
+      el("div", {class: "kpi"}, [el("b", {text: rate(T.ok, T.a)}), el("span", {text: "right on first try"})]),
+      el("div", {class: "kpi"}, [el("b", {text: T.streak + "d"}), el("span", {text: "streak · " + T.days + " active days"})])
+    ])]),
+    el("div", {class: "card"}, [el("h2", {text: "Last 14 days"}), el("div", {html: svg}), el("div", {class: "small muted", text: "Green: right, red: wrong."})]),
+    el("div", {class: "card stack"}, [el("h2", {text: "Learned (interval 7+ days)"}), el("div", {class: "bars"}, [deckRow("Words", vd, D.vocab.length), deckRow("Mistakes", md, D.mistakes.length)]),
+      el("div", {class: "small muted", text: "In progress: " + vd.learning + " words, " + md.learning + " sentences. Not started: " + vd.fresh + " words, " + md.fresh + " sentences."})]),
+    catKeys.length ? el("div", {class: "card"}, [el("h2", {text: "Fix the mistake: accuracy by type"}), el("div", {class: "bars"}, catKeys.map(function (k) {
+      var c = S.cat[k], r = (c[1] || 0) / c[0];
+      return el("div", {class: "bar"}, [el("span", {text: MCATS[k] || k}), el("i", {style: "width:" + Math.round(100 * r) + "%;background:" + (r >= .8 ? "var(--good)" : r >= .5 ? "var(--warn)" : "var(--bad)")}), el("em", {text: Math.round(100 * r) + "% · " + c[0]})]);
+    }))]) : null,
+    log.length ? el("div", {class: "card list"}, [el("h2", {text: "Recent sessions"})].concat(log.map(function (s) {
+      return el("div", {class: "it", style: "cursor:default"}, [el("span", {text: fmt(s[0]) + " · " + s[1]}), el("b", {text: s[3] + "/" + s[2]})]);
+    }))) : el("div", {class: "card muted", text: "No exercises yet. Start with “Fix the mistake” or “New words”."})
   ]);
 }
 
@@ -219,29 +318,29 @@ function mistakesMenu() {
   var keys = Object.keys(cats).sort(function (a, b) { return cats[b].length - cats[a].length; });
   var all = buildQueue(D.mistakes, "m");
   render([
-    el("div", {class: "card"}, [el("h1", {text: "Исправь ошибку"}), el("div", {class: "muted small", text: "Фраза из твоей речи. Исправь её прямо в поле и нажми «Проверить»."})]),
+    el("div", {class: "card"}, [el("h1", {text: "Fix the mistake"}), el("div", {class: "muted small", text: "A sentence you said in class. Correct it right in the box and press Check."})]),
     el("div", {class: "tiles"}, [
-      el("button", {class: "tile", onclick: function () { startSession("m", all, "Все ошибки"); }}, [el("div", {}, [el("b", {text: "Повторение на сегодня"}), el("span", {class: "muted small", text: "к повтору + новые"})]), el("span", {class: "cnt", text: all.length ? String(all.length) : "✓"})])
+      tile("Today's review", "due + new", all.length ? String(all.length) : "✓", function () { startSession("m", all, "All mistakes", mistakesMenu); })
     ].concat(keys.map(function (k) {
-      return el("button", {class: "tile", onclick: function () {
-        var q = buildQueue(cats[k], "m"); if (!q.length) q = cats[k].slice().sort(function () { return Math.random() - .5; }).slice(0, 15);
-        startSession("m", q, MCATS[k] || k);
-      }}, [el("div", {}, [el("b", {text: MCATS[k] || k}), el("span", {class: "muted small", text: cats[k].length + " фраз"})]), el("span", {class: "cnt", text: "→"})]);
+      var c = S.cat[k];
+      return tile(MCATS[k] || k, cats[k].length + " sentences" + (c ? " · " + rate(c[1] || 0, c[0]) + " right" : ""), "→", function () {
+        var q = buildQueue(cats[k], "m"); if (!q.length) q = shuffle(cats[k]).slice(0, 15);
+        startSession("m", q, MCATS[k] || k, mistakesMenu);
+      });
     })))
   ]);
 }
 
 /* ---------- session ---------- */
-function startSession(kind, queue, title) {
-  if (!queue.length) { return done(kind, title, 0, 0, true); }
-  var q = queue.slice(), total = q.length, ok = 0, answered = 0, retried = {};
-  setBack(kind === "m" ? mistakesMenu : home);
+function startSession(kind, queue, title, back) {
+  if (!queue.length) { return done(kind, title, 0, 0, back, true); }
+  var q = queue.slice(), total = q.length, ok = 0, first = 0, firstOk = 0, retried = {};
+  setBack(back);
   function next() {
-    if (!q.length) return done(kind, title, ok, answered);
+    if (!q.length) return done(kind, title, firstOk, first, back);
     var item = q.shift();
     (kind === "v" ? wordCard : mistakeCard)(item, function (good) {
-      answered++; if (good) ok++;
-      if (!retried[item.id]) grade(item.id, kind, good);
+      if (!retried[item.id]) { grade(item, kind, good); first++; if (good) firstOk++; }
       if (!good && !retried[item.id]) { retried[item.id] = 1; q.push(item); }
       next();
     }, title, (total - q.length) / total);
@@ -253,14 +352,14 @@ function head(title, p) {
 }
 
 function wordCard(v, finish, title, p) {
-  var input = el("input", {class: "ans", id: "ans", autocomplete: "off", autocapitalize: "off", spellcheck: "false", placeholder: "английское слово"});
+  var input = el("input", {class: "ans", id: "ans", autocomplete: "off", autocapitalize: "off", spellcheck: "false", placeholder: "English word"});
   var out = el("div", {class: "stack", hidden: "hidden"});
   var hint = el("div", {class: "muted small", hidden: "hidden"});
   var checked = false, hintN = 0;
   var btns = el("div", {class: "row"}, [
-    el("button", {class: "btn ghost", text: "Подсказка", onclick: function () { hintN++; hint.hidden = false; hint.textContent = v.answer.slice(0, hintN) + "… (" + v.answer.length + " букв)"; input.focus(); }}),
-    el("button", {class: "btn ghost", text: "Не знаю", onclick: function () { check(true); }}),
-    el("button", {class: "btn", text: "Проверить", onclick: function () { check(false); }})
+    el("button", {class: "btn ghost", text: "Hint", onclick: function () { hintN++; hint.hidden = false; hint.textContent = v.answer.slice(0, hintN) + "… (" + v.answer.length + " letters)"; input.focus(); }}),
+    el("button", {class: "btn ghost", text: "Don't know", onclick: function () { check(true); }}),
+    el("button", {class: "btn", text: "Check", onclick: function () { check(false); }})
   ]);
   function check(giveUp) {
     if (checked) return; checked = true;
@@ -270,14 +369,14 @@ function wordCard(v, finish, title, p) {
     var good = exact || near;
     haptic(good ? "success" : "error");
     out.hidden = false; btns.hidden = true; input.disabled = true;
-    out.appendChild(el("div", {class: "verdict " + (exact ? "ok" : near ? "mid" : "no"), text: exact ? "Верно!" : near ? "Почти: опечатка, засчитано" : giveUp ? "Запомни:" : "Неверно"}));
+    out.appendChild(el("div", {class: "verdict " + (exact ? "ok" : near ? "mid" : "no"), text: exact ? "Correct!" : near ? "Almost: a typo, counted as right" : giveUp ? "Remember:" : "Wrong"}));
     out.appendChild(el("div", {class: "back"}, [
       el("div", {}, [el("b", {text: v.word}), " ", el("span", {class: "muted", text: v.pos + "  " + v.ipa})]),
       el("div", {text: v.endef}),
       el("div", {}, [el("i", {text: v.example})]),
       el("div", {class: "muted small", text: v.ruex})
     ]));
-    var nx = el("button", {class: "btn", text: "Дальше", onclick: function () { finish(good); }});
+    var nx = el("button", {class: "btn", text: "Next", onclick: function () { finish(good); }});
     out.appendChild(nx); nx.focus();
   }
   input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); checked ? out.querySelector(".btn").click() : check(false); } });
@@ -290,7 +389,7 @@ function wordCard(v, finish, title, p) {
   input.focus();
 }
 
-function wordDiff(a, b) { // LCS по словам: что убрать из a, что добавить из b
+function wordDiff(a, b) { // word-level LCS: what to remove from a, what to add from b
   var A = a.split(" "), B = b.split(" "), m = A.length, n = B.length, T = [];
   for (var i = 0; i <= m; i++) { T[i] = []; for (var j = 0; j <= n; j++) T[i][j] = 0; }
   for (i = m - 1; i >= 0; i--) for (j = n - 1; j >= 0; j--) T[i][j] = norm(A[i]) === norm(B[j]) ? T[i+1][j+1] + 1 : Math.max(T[i+1][j], T[i][j+1]);
@@ -302,12 +401,12 @@ function wordDiff(a, b) { // LCS по словам: что убрать из a, 
 }
 
 function mistakeCard(m, finish, title, p) {
-  var parts = splitCtx(m.wrong), wrong = parts[0];
+  var parts = splitCtx(m.wrong), wrong = parts[0], catName = MCATS[m.cat] || m.cat;
   var ta = el("textarea", {class: "ans", id: "fix", autocapitalize: "sentences", spellcheck: "false"}); ta.value = wrong;
   var out = el("div", {class: "stack", hidden: "hidden"}), checked = false;
   var btns = el("div", {class: "row"}, [
-    el("button", {class: "btn ghost", text: "Не знаю", onclick: function () { check(true); }}),
-    el("button", {class: "btn", text: "Проверить", onclick: function () { check(false); }})
+    el("button", {class: "btn ghost", text: "Don't know", onclick: function () { check(true); }}),
+    el("button", {class: "btn", text: "Check", onclick: function () { check(false); }})
   ]);
   function check(giveUp) {
     if (checked) return; checked = true;
@@ -315,28 +414,29 @@ function mistakeCard(m, finish, title, p) {
     var unchanged = norm(ta.value) === norm(wrong);
     haptic(good ? "success" : "error");
     btns.hidden = true; ta.disabled = true; out.hidden = false;
-    out.appendChild(el("div", {class: "verdict " + (good ? "ok" : "no"), text: good ? "Верно!" : giveUp ? "Правильно так:" : unchanged ? "Фраза не изменилась. Правильно так:" : "Не совпало. Твой вариант против правильного:"}));
+    out.appendChild(el("div", {class: "verdict " + (good ? "ok" : "no"), text: good ? "Correct!" : giveUp ? "The right version:" : unchanged ? "You didn't change the sentence. The right version:" : "Not quite. Your version vs the right one:"}));
     if (good || giveUp || unchanged) out.appendChild(el("div", {class: "prompt"}, [el("b", {text: m.right})]));
     else out.appendChild(wordDiff(ta.value.trim(), m.right));
     out.appendChild(el("div", {class: "muted small", text: m.why}));
     var row = el("div", {class: "row"});
-    if (!good && !giveUp && !unchanged) row.appendChild(el("button", {class: "btn ghost", text: "Мой вариант тоже верный", onclick: function () { finish(true); }}));
-    row.appendChild(el("button", {class: "btn", text: "Дальше", onclick: function () { finish(good); }}));
+    if (!good && !giveUp && !unchanged) row.appendChild(el("button", {class: "btn ghost", text: "Mine is right too", onclick: function () { finish(true); }}));
+    row.appendChild(el("button", {class: "btn", text: "Next", onclick: function () { finish(good); }}));
     out.appendChild(row);
   }
-  render(head(title + " · " + (MCATS[m.cat] || m.cat), p).concat([el("div", {class: "card stack"}, [
-    el("div", {}, [el("div", {class: "prompt", text: wrong}), parts[1] ? el("div", {class: "ctx", text: "Контекст: " + parts[1]}) : null]),
+  render(head(title === catName ? title : title + " · " + catName, p).concat([el("div", {class: "card stack"}, [
+    el("div", {}, [el("div", {class: "prompt", text: wrong}), parts[1] ? el("div", {class: "ctx", text: "Context: " + parts[1]}) : null]),
     ta, btns, out
   ])]));
 }
 
-function done(kind, title, ok, answered, empty) {
-  setBack(home);
+function done(kind, title, ok, answered, back, empty) {
+  if (!empty && answered) { S.log.push([ymd(), title, answered, ok]); if (S.log.length > 60) S.log = S.log.slice(-60); saveState(); }
+  setBack(back || home);
   haptic("success");
   render([el("div", {class: "card stack"}, [
-    el("h1", {text: empty ? "На сегодня всё" : "Готово!"}),
-    el("div", {text: empty ? "Карточек к повторению нет. Новые откроются завтра." : "Ответов: " + answered + ", верно " + ok + " (" + Math.round(100 * ok / Math.max(1, answered)) + "%). Ошибки вернутся раньше, верные позже."}),
-    el("button", {class: "btn", text: "В кабинет", onclick: home})
+    el("h1", {text: empty ? "All done for today" : "Done!"}),
+    el("div", {text: empty ? "Nothing to review. New cards unlock tomorrow." : "Cards: " + answered + ", right on first try: " + ok + " (" + rate(ok, answered) + "). Mistakes come back sooner, right answers later."}),
+    el("div", {class: "row"}, [el("button", {class: "btn ghost", text: "My practice", onclick: practice}), el("button", {class: "btn", text: "Home", onclick: home})])
   ])]);
 }
 
@@ -344,7 +444,7 @@ function done(kind, title, ok, answered, empty) {
 fetch("data.json?v=" + Date.now()).then(function (r) { return r.json(); }).then(function (d) {
   D = d;
   loadState(function (s) { S = s; home(); });
-}).catch(function (e) { render([el("div", {class: "card", text: "Не удалось загрузить данные: " + e.message})]); });
+}).catch(function (e) { render([el("div", {class: "card", text: "Couldn't load data: " + e.message})]); });
 </script>
 </body>
 </html>
