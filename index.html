@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>English with Sam</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:var(--tg-theme-bg-color,#ffffff);
+  --bg2:var(--tg-theme-secondary-bg-color,#f1f3f5);
+  --fg:var(--tg-theme-text-color,#15202b);
+  --muted:var(--tg-theme-hint-color,#6b7785);
+  --accent:var(--tg-theme-button-color,#2a7fd4);
+  --accent-fg:var(--tg-theme-button-text-color,#ffffff);
+  --link:var(--tg-theme-link-color,#2a7fd4);
+  --good:#2e9e5b; --bad:#d9534f; --warn:#d99a2b;
+  --line:color-mix(in srgb,var(--fg) 12%,transparent);
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:var(--tg-theme-bg-color,#17212b); --bg2:var(--tg-theme-secondary-bg-color,#0e1621);
+  --fg:var(--tg-theme-text-color,#f1f3f5); --muted:var(--tg-theme-hint-color,#8a98a8);
+  --good:#4cc27a; --bad:#f07068; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg2);color:var(--fg);font:16px/1.45 -apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+main{max-width:560px;margin:0 auto;padding:12px max(12px,env(safe-area-inset-left)) 32px max(12px,env(safe-area-inset-right));display:flex;flex-direction:column;gap:12px}
+.card{background:var(--bg);border-radius:14px;padding:16px}
+h1{font-size:22px;margin:0}
+h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+.muted{color:var(--muted)} .small{font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi b{display:block;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+.up{color:var(--good)} .down{color:var(--bad)}
+svg text{fill:var(--muted);font-size:11px}
+.bars{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:112px 1fr 44px;align-items:center;gap:8px;font-size:14px}
+.bar i{display:block;height:8px;border-radius:4px;background:var(--accent)}
+.bar em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+.tiles{display:grid;gap:8px}
+.tile{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;border:0;background:var(--bg);color:var(--fg);border-radius:14px;padding:16px;font:inherit;cursor:pointer}
+.tile b{display:block;font-size:17px}
+.tile .cnt{background:var(--accent);color:var(--accent-fg);border-radius:20px;padding:2px 10px;font-weight:600;font-size:14px;white-space:nowrap}
+.tile[disabled]{opacity:.55;cursor:default}
+.tile[disabled] .cnt{background:var(--bg2);color:var(--muted)}
+button.btn{border:0;border-radius:10px;padding:12px 16px;font:600 16px/1 inherit;font-family:inherit;cursor:pointer;background:var(--accent);color:var(--accent-fg)}
+button.ghost{background:var(--bg2);color:var(--fg)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row .btn{flex:1}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.chip{border:0;border-radius:16px;padding:6px 12px;background:var(--bg);color:var(--fg);font:14px inherit;font-family:inherit;white-space:nowrap;cursor:pointer}
+.chip.on{background:var(--accent);color:var(--accent-fg)}
+.prompt{font-size:19px;line-height:1.4}
+.ctx{font-size:14px;color:var(--muted);margin-top:6px}
+input.ans,textarea.ans{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:12px;font:inherit;font-size:17px;background:var(--bg);color:var(--fg)}
+textarea.ans{min-height:84px;resize:vertical}
+input.ans:focus,textarea.ans:focus{outline:none;border-color:var(--accent)}
+.verdict{font-weight:600}
+.verdict.ok{color:var(--good)} .verdict.no{color:var(--bad)} .verdict.mid{color:var(--warn)}
+.diff ins{text-decoration:none;background:color-mix(in srgb,var(--good) 22%,transparent);border-radius:4px;padding:0 2px}
+.diff del{background:color-mix(in srgb,var(--bad) 22%,transparent);border-radius:4px;padding:0 2px}
+.back{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.progress{height:4px;background:var(--bg);border-radius:2px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.stack{display:flex;flex-direction:column;gap:12px}
+details summary{cursor:pointer;color:var(--link)}
+.lesson{padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.lesson b{font-variant-numeric:tabular-nums}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="app"><div class="card muted">Загружаю…</div></main>
+<script>
+"use strict";
+var tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData !== undefined ? Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+var NEW_PER_DAY = 10, SESSION = 20, INTERVALS = [0, 1, 3, 7, 16, 35, 90];
+var CATS = {tense:"Времена",verb:"Форма глагола",article:"Артикли",prep:"Предлоги",order:"Порядок слов",pron:"Местоимения",number:"Число",word:"Выбор слова",redun:"Лишние слова",mean:"Смысл",quest:"Вопросы",disc:"Связность"};
+var MCATS = {"tense":"Времена","verb form":"Форма глагола","preposition":"Предлоги","article":"Артикли","word choice":"Выбор слова","redundancy":"Лишние слова","pronoun":"Местоимения","question":"Вопросы"};
+var D, S, app = document.getElementById("app");
+
+/* ---------- storage: Telegram CloudStorage, fallback localStorage ---------- */
+var cloud = tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9") ? tg.CloudStorage : null;
+function loadState(cb) {
+  var empty = {cards:{}, days:{}};
+  function parse(s) { try { var o = JSON.parse(s); return o && o.cards ? o : empty; } catch (e) { return empty; } }
+  if (!cloud) { var s = null; try { s = localStorage.getItem("st"); } catch (e) {} return cb(s ? parse(s) : empty); }
+  cloud.getItem("stn", function (err, n) {
+    n = parseInt(n || "0", 10);
+    if (err || !n) return cb(empty);
+    var keys = []; for (var i = 0; i < n; i++) keys.push("st" + i);
+    cloud.getItems(keys, function (err2, vals) {
+      if (err2 || !vals) return cb(empty);
+      cb(parse(keys.map(function (k) { return vals[k] || ""; }).join("")));
+    });
+  });
+}
+var saveTimer = null;
+function saveState() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function () {
+    var s = JSON.stringify(S);
+    if (!cloud) { try { localStorage.setItem("st", s); } catch (e) {} return; }
+    var parts = s.match(/[\s\S]{1,3800}/g) || [""];
+    parts.forEach(function (p, i) { cloud.setItem("st" + i, p); });
+    cloud.setItem("stn", String(parts.length));
+  }, 400);
+}
+
+/* ---------- helpers ---------- */
+function today() { var d = new Date(); return Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 864e5); }
+function ymd() { return new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function el(tag, attrs, kids) {
+  var n = document.createElement(tag);
+  for (var k in attrs || {}) { if (k === "text") n.textContent = attrs[k]; else if (k === "html") n.innerHTML = attrs[k]; else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== false && attrs[k] != null) n.setAttribute(k, attrs[k]); }
+  (kids || []).forEach(function (c) { if (c) n.appendChild(typeof c === "string" ? document.createTextNode(c) : c); });
+  return n;
+}
+function fmt(d) { return new Date(d + "T00:00:00").toLocaleDateString("ru-RU", {day: "numeric", month: "short"}); }
+function pct(l) { return Math.round(100 * l.clean / l.sent); }
+function norm(s) { return s.toLowerCase().replace(/[’‘`]/g, "'").replace(/[^a-z0-9'\s-]/g, " ").replace(/\s+/g, " ").trim(); }
+function lev(a, b) {
+  var m = a.length, n = b.length, d = []; for (var i = 0; i <= m; i++) { d[i] = [i]; }
+  for (var j = 1; j <= n; j++) d[0][j] = j;
+  for (i = 1; i <= m; i++) for (j = 1; j <= n; j++) d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[m][n];
+}
+function haptic(t) { try { tg && tg.HapticFeedback.notificationOccurred(t); } catch (e) {} }
+function splitCtx(s) { var m = s.match(/^(.*?)\s*\(([^)]*)\)\s*$/); return m ? [m[1], m[2]] : [s, ""]; }
+
+/* ---------- spaced repetition ---------- */
+function card(id) { return S.cards[id]; }               // [box, due, right, wrong]
+function isDue(id) { var c = card(id); return c && c[1] <= today(); }
+function isNew(id) { return !card(id); }
+function newLeft(kind) { var k = ymd() + ":" + kind; return Math.max(0, NEW_PER_DAY - ((S.days[k] || {}).n || 0)); }
+function grade(id, kind, ok) {
+  var c = card(id), t = today();
+  if (!c) { c = S.cards[id] = [0, t, 0, 0]; var k = ymd() + ":" + kind; S.days[k] = S.days[k] || {}; S.days[k].n = (S.days[k].n || 0) + 1; }
+  if (ok) { c[0] = Math.min(c[0] + 1, INTERVALS.length - 1); c[2]++; } else { c[0] = 0; c[3]++; }
+  c[1] = t + INTERVALS[c[0]];
+  var dk = ymd(); S.days[dk] = S.days[dk] || {a: 0, ok: 0}; S.days[dk].a = (S.days[dk].a || 0) + 1; if (ok) S.days[dk].ok = (S.days[dk].ok || 0) + 1;
+  saveState();
+}
+function buildQueue(items, kind) {
+  var due = items.filter(function (x) { return isDue(x.id); }).sort(function (a, b) { return card(a.id)[1] - card(b.id)[1]; });
+  var fresh = items.filter(function (x) { return isNew(x.id); }).slice(0, newLeft(kind));
+  return due.concat(fresh).slice(0, SESSION);
+}
+
+/* ---------- navigation ---------- */
+function setBack(fn) {
+  if (!tg) return;
+  tg.BackButton.offClick(setBack._fn || function () {});
+  if (fn) { setBack._fn = fn; tg.BackButton.onClick(fn); tg.BackButton.show(); } else tg.BackButton.hide();
+}
+function render(nodes) { app.innerHTML = ""; nodes.forEach(function (n) { if (n) app.appendChild(n); }); window.scrollTo(0, 0); }
+
+/* ---------- home ---------- */
+function home() {
+  setBack(null);
+  var L = D.lessons, full = L.filter(function (l) { return l.e; }), last = full[full.length - 1], prev = full[full.length - 2];
+  var end = L[L.length - 1], best = L.reduce(function (a, b) { return pct(b) > pct(a) ? b : a; });
+  var dlt = pct(last) - pct(prev);
+  var dayKey = ymd(), td = S.days[dayKey] || {};
+
+  var kpis = el("div", {class: "kpis"}, [
+    el("div", {class: "kpi"}, [el("b", {text: pct(end) + "%"}), el("span", {text: "чистых " + fmt(end.date)}), el("div", {class: "small " + (dlt >= 0 ? "up" : "down"), text: (dlt >= 0 ? "▲ +" : "▼ ") + dlt + " п.п."})]),
+    el("div", {class: "kpi"}, [el("b", {text: pct(best) + "%"}), el("span", {text: "рекорд, " + fmt(best.date)})]),
+    el("div", {class: "kpi"}, [el("b", {text: String(td.a || 0)}), el("span", {text: "ответов сегодня" + (td.a ? ", верно " + Math.round(100 * (td.ok || 0) / td.a) + "%" : "")})])
+  ]);
+
+  // accuracy chart
+  var W = 320, H = 120, l0 = 30, r0 = 10, t0 = 14, b0 = 20;
+  var tA = Date.parse(L[0].date), tB = Date.parse(end.date);
+  function X(d) { return l0 + (Date.parse(d) - tA) / (tB - tA) * (W - l0 - r0); }
+  function Y(v) { return t0 + (100 - v) / 100 * (H - t0 - b0); }
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%">';
+  [25, 50, 75].forEach(function (v) { svg += '<line x1="' + l0 + '" x2="' + (W - r0) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" stroke="var(--line)"/><text x="' + (l0 - 4) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + v + '</text>'; });
+  svg += '<polyline fill="none" stroke="var(--accent)" stroke-width="2" points="' + L.map(function (x) { return X(x.date) + "," + Y(pct(x)); }).join(" ") + '"/>';
+  L.forEach(function (x, i) { svg += '<circle cx="' + X(x.date) + '" cy="' + Y(pct(x)) + '" r="' + (i === L.length - 1 ? 4 : 2.5) + '" fill="var(--accent)"/>'; });
+  svg += '<text x="' + l0 + '" y="' + (H - 4) + '">' + fmt(L[0].date) + '</text><text x="' + (W - r0) + '" y="' + (H - 4) + '" text-anchor="end">' + fmt(end.date) + '</text></svg>';
+
+  // top errors of last lesson
+  var top = Object.keys(last.e).sort(function (a, b) { return last.e[b] - last.e[a]; }).slice(0, 5), mx = last.e[top[0]] || 1;
+  var bars = el("div", {class: "bars"}, top.map(function (k) {
+    var dv = last.e[k] - prev.e[k];
+    return el("div", {class: "bar"}, [el("span", {text: CATS[k]}), el("i", {style: "width:" + (100 * last.e[k] / mx) + "%"}), el("em", {class: dv < 0 ? "up" : dv > 0 ? "down" : "", text: last.e[k] + (dv ? (dv > 0 ? " ▲" : " ▼") : "")})]);
+  }));
+
+  var vDue = buildQueue(D.vocab, "v").length, mDue = buildQueue(D.mistakes, "m").length;
+  function tile(title, sub, n, fn, off) {
+    return el("button", {class: "tile", onclick: fn, disabled: off ? "disabled" : false}, [el("div", {}, [el("b", {text: title}), el("span", {class: "muted small", text: sub})]), el("span", {class: "cnt", text: n})]);
+  }
+  var lessonsList = el("details", {}, [el("summary", {text: "Все уроки (" + L.length + ")"})].concat(L.slice().reverse().map(function (l) {
+    return el("div", {class: "lesson"}, [el("b", {text: fmt(l.date) + " · " + pct(l) + "% (" + l.clean + "/" + l.sent + ")"}), el("div", {class: "muted", text: l.summary || ""})]);
+  })));
+
+  render([
+    el("div", {class: "card"}, [el("h1", {text: "English with Sam"}), el("div", {class: "muted small", text: L.length + " уроков · данные на " + fmt(D.updated)})]),
+    el("div", {class: "card"}, [kpis]),
+    el("div", {class: "card"}, [el("h2", {text: "Доля чистых предложений"}), el("div", {html: svg}),
+      end.long ? el("div", {class: "small muted", text: "Длинные фразы на последнем уроке: " + Math.round(100 * end.long.clean / end.long.sent) + "% (" + end.long.clean + "/" + end.long.sent + ")"}) : null]),
+    el("div", {class: "card"}, [el("h2", {text: "Главные ошибки " + fmt(last.date)}), bars]),
+    last.goal ? el("div", {class: "card"}, [el("h2", {text: "Цель от Сэма"}), el("div", {text: last.goal})]) : null,
+    el("div", {class: "tiles"}, [
+      tile("Исправь ошибку", "твои фразы с уроков", mDue ? mDue + " сегодня" : "готово ✓", function () { mistakesMenu(); }),
+      tile("Новые слова", D.vocab.length + " слов из словарей", vDue ? vDue + " сегодня" : "готово ✓", function () { startSession("v", buildQueue(D.vocab, "v"), "Новые слова"); }),
+      tile("Синонимы", D.synonyms.length ? D.synonyms.length + " пар" : "появятся с новыми отчётами Сэма", D.synonyms.length ? "→" : "скоро", function () {}, !D.synonyms.length)
+    ]),
+    el("div", {class: "card"}, [lessonsList])
+  ]);
+}
+
+/* ---------- mistakes: category choice ---------- */
+function mistakesMenu() {
+  setBack(home);
+  var cats = {}; D.mistakes.forEach(function (m) { (cats[m.cat] = cats[m.cat] || []).push(m); });
+  var keys = Object.keys(cats).sort(function (a, b) { return cats[b].length - cats[a].length; });
+  var all = buildQueue(D.mistakes, "m");
+  render([
+    el("div", {class: "card"}, [el("h1", {text: "Исправь ошибку"}), el("div", {class: "muted small", text: "Фраза из твоей речи. Исправь её прямо в поле и нажми «Проверить»."})]),
+    el("div", {class: "tiles"}, [
+      el("button", {class: "tile", onclick: function () { startSession("m", all, "Все ошибки"); }}, [el("div", {}, [el("b", {text: "Повторение на сегодня"}), el("span", {class: "muted small", text: "к повтору + новые"})]), el("span", {class: "cnt", text: all.length ? String(all.length) : "✓"})])
+    ].concat(keys.map(function (k) {
+      return el("button", {class: "tile", onclick: function () {
+        var q = buildQueue(cats[k], "m"); if (!q.length) q = cats[k].slice().sort(function () { return Math.random() - .5; }).slice(0, 15);
+        startSession("m", q, MCATS[k] || k);
+      }}, [el("div", {}, [el("b", {text: MCATS[k] || k}), el("span", {class: "muted small", text: cats[k].length + " фраз"})]), el("span", {class: "cnt", text: "→"})]);
+    })))
+  ]);
+}
+
+/* ---------- session ---------- */
+function startSession(kind, queue, title) {
+  if (!queue.length) { return done(kind, title, 0, 0, true); }
+  var q = queue.slice(), total = q.length, ok = 0, answered = 0, retried = {};
+  setBack(kind === "m" ? mistakesMenu : home);
+  function next() {
+    if (!q.length) return done(kind, title, ok, answered);
+    var item = q.shift();
+    (kind === "v" ? wordCard : mistakeCard)(item, function (good) {
+      answered++; if (good) ok++;
+      if (!retried[item.id]) grade(item.id, kind, good);
+      if (!good && !retried[item.id]) { retried[item.id] = 1; q.push(item); }
+      next();
+    }, title, (total - q.length) / total);
+  }
+  next();
+}
+function head(title, p) {
+  return [el("div", {class: "progress"}, [el("i", {style: "width:" + Math.round(100 * p) + "%"})]), el("div", {class: "muted small", text: title})];
+}
+
+function wordCard(v, finish, title, p) {
+  var input = el("input", {class: "ans", id: "ans", autocomplete: "off", autocapitalize: "off", spellcheck: "false", placeholder: "английское слово"});
+  var out = el("div", {class: "stack", hidden: "hidden"});
+  var hint = el("div", {class: "muted small", hidden: "hidden"});
+  var checked = false, hintN = 0;
+  var btns = el("div", {class: "row"}, [
+    el("button", {class: "btn ghost", text: "Подсказка", onclick: function () { hintN++; hint.hidden = false; hint.textContent = v.answer.slice(0, hintN) + "… (" + v.answer.length + " букв)"; input.focus(); }}),
+    el("button", {class: "btn ghost", text: "Не знаю", onclick: function () { check(true); }}),
+    el("button", {class: "btn", text: "Проверить", onclick: function () { check(false); }})
+  ]);
+  function check(giveUp) {
+    if (checked) return; checked = true;
+    var a = norm(input.value), targets = [norm(v.answer), norm(v.word)];
+    var exact = !giveUp && targets.indexOf(a) >= 0;
+    var near = !giveUp && !exact && a.length >= 4 && targets.some(function (t) { return lev(a, t) <= (t.length > 7 ? 2 : 1); });
+    var good = exact || near;
+    haptic(good ? "success" : "error");
+    out.hidden = false; btns.hidden = true; input.disabled = true;
+    out.appendChild(el("div", {class: "verdict " + (exact ? "ok" : near ? "mid" : "no"), text: exact ? "Верно!" : near ? "Почти: опечатка, засчитано" : giveUp ? "Запомни:" : "Неверно"}));
+    out.appendChild(el("div", {class: "back"}, [
+      el("div", {}, [el("b", {text: v.word}), " ", el("span", {class: "muted", text: v.pos + "  " + v.ipa})]),
+      el("div", {text: v.endef}),
+      el("div", {}, [el("i", {text: v.example})]),
+      el("div", {class: "muted small", text: v.ruex})
+    ]));
+    var nx = el("button", {class: "btn", text: "Дальше", onclick: function () { finish(good); }});
+    out.appendChild(nx); nx.focus();
+  }
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); checked ? out.querySelector(".btn").click() : check(false); } });
+  render(head(title, p).concat([el("div", {class: "card stack"}, [
+    el("div", {class: "prompt"}, [el("b", {text: v.ru})]),
+    el("div", {class: "prompt"}, [el("i", {text: v.blank})]),
+    el("div", {class: "muted small", text: v.rudef}),
+    input, hint, btns, out
+  ])]));
+  input.focus();
+}
+
+function wordDiff(a, b) { // LCS по словам: что убрать из a, что добавить из b
+  var A = a.split(" "), B = b.split(" "), m = A.length, n = B.length, T = [];
+  for (var i = 0; i <= m; i++) { T[i] = []; for (var j = 0; j <= n; j++) T[i][j] = 0; }
+  for (i = m - 1; i >= 0; i--) for (j = n - 1; j >= 0; j--) T[i][j] = norm(A[i]) === norm(B[j]) ? T[i+1][j+1] + 1 : Math.max(T[i+1][j], T[i][j+1]);
+  var out = el("div", {class: "diff prompt"}); i = 0; j = 0;
+  function add(tag, w) { out.appendChild(tag ? el(tag, {text: w}) : document.createTextNode(w)); out.appendChild(document.createTextNode(" ")); }
+  while (i < m && j < n) { if (norm(A[i]) === norm(B[j])) { add(null, B[j]); i++; j++; } else if (T[i+1][j] >= T[i][j+1]) add("del", A[i++]); else add("ins", B[j++]); }
+  while (i < m) add("del", A[i++]); while (j < n) add("ins", B[j++]);
+  return out;
+}
+
+function mistakeCard(m, finish, title, p) {
+  var parts = splitCtx(m.wrong), wrong = parts[0];
+  var ta = el("textarea", {class: "ans", id: "fix", autocapitalize: "sentences", spellcheck: "false"}); ta.value = wrong;
+  var out = el("div", {class: "stack", hidden: "hidden"}), checked = false;
+  var btns = el("div", {class: "row"}, [
+    el("button", {class: "btn ghost", text: "Не знаю", onclick: function () { check(true); }}),
+    el("button", {class: "btn", text: "Проверить", onclick: function () { check(false); }})
+  ]);
+  function check(giveUp) {
+    if (checked) return; checked = true;
+    var good = !giveUp && norm(ta.value) === norm(m.right);
+    var unchanged = norm(ta.value) === norm(wrong);
+    haptic(good ? "success" : "error");
+    btns.hidden = true; ta.disabled = true; out.hidden = false;
+    out.appendChild(el("div", {class: "verdict " + (good ? "ok" : "no"), text: good ? "Верно!" : giveUp ? "Правильно так:" : unchanged ? "Фраза не изменилась. Правильно так:" : "Не совпало. Твой вариант против правильного:"}));
+    if (good || giveUp || unchanged) out.appendChild(el("div", {class: "prompt"}, [el("b", {text: m.right})]));
+    else out.appendChild(wordDiff(ta.value.trim(), m.right));
+    out.appendChild(el("div", {class: "muted small", text: m.why}));
+    var row = el("div", {class: "row"});
+    if (!good && !giveUp && !unchanged) row.appendChild(el("button", {class: "btn ghost", text: "Мой вариант тоже верный", onclick: function () { finish(true); }}));
+    row.appendChild(el("button", {class: "btn", text: "Дальше", onclick: function () { finish(good); }}));
+    out.appendChild(row);
+  }
+  render(head(title + " · " + (MCATS[m.cat] || m.cat), p).concat([el("div", {class: "card stack"}, [
+    el("div", {}, [el("div", {class: "prompt", text: wrong}), parts[1] ? el("div", {class: "ctx", text: "Контекст: " + parts[1]}) : null]),
+    ta, btns, out
+  ])]));
+}
+
+function done(kind, title, ok, answered, empty) {
+  setBack(home);
+  haptic("success");
+  render([el("div", {class: "card stack"}, [
+    el("h1", {text: empty ? "На сегодня всё" : "Готово!"}),
+    el("div", {text: empty ? "Карточек к повторению нет. Новые откроются завтра." : "Ответов: " + answered + ", верно " + ok + " (" + Math.round(100 * ok / Math.max(1, answered)) + "%). Ошибки вернутся раньше, верные позже."}),
+    el("button", {class: "btn", text: "В кабинет", onclick: home})
+  ])]);
+}
+
+/* ---------- boot ---------- */
+fetch("data.json?v=" + Date.now()).then(function (r) { return r.json(); }).then(function (d) {
+  D = d;
+  loadState(function (s) { S = s; home(); });
+}).catch(function (e) { render([el("div", {class: "card", text: "Не удалось загрузить данные: " + e.message})]); });
+</script>
+</body>
+</html>
