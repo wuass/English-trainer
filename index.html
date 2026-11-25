@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>English with Sam</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 :root{
   --bg:var(--tg-theme-bg-color,#ffffff);
@@ -74,15 +73,13 @@ input.ans:focus,textarea.ans:focus{outline:none;border-color:var(--accent)}
 <main id="app"><div class="card muted">Loading…</div></main>
 <script>
 "use strict";
-var tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
-if (tg) { tg.ready(); tg.expand(); }
+var tg = null, cloud = null;
 var NEW_PER_DAY = 10, SESSION = 20, INTERVALS = [0, 1, 3, 7, 16, 35, 90], LEARNED_BOX = 3;
 var CATS = {tense:"Tense",verb:"Verb form",article:"Articles",prep:"Prepositions",order:"Word order",pron:"Pronouns",number:"Singular/plural",word:"Word choice",redun:"Extra words",mean:"Meaning",quest:"Questions",disc:"Linking"};
 var MCATS = {"tense":"Tense","verb form":"Verb form","preposition":"Prepositions","article":"Articles","word choice":"Word choice","redundancy":"Extra words","pronoun":"Pronouns","question":"Questions"};
 var D, S, app = document.getElementById("app");
 
 /* ---------- storage: Telegram CloudStorage, fallback localStorage ---------- */
-var cloud = tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9") ? tg.CloudStorage : null;
 function fresh() { return {cards:{}, days:{}, cat:{}, log:[]}; }
 function loadState(cb) {
   function parse(s) {
@@ -441,10 +438,23 @@ function done(kind, title, ok, answered, back, empty) {
 }
 
 /* ---------- boot ---------- */
-fetch("data.json?v=" + Date.now()).then(function (r) { return r.json(); }).then(function (d) {
-  D = d;
-  loadState(function (s) { S = s; home(); });
-}).catch(function (e) { render([el("div", {class: "card", text: "Couldn't load data: " + e.message})]); });
+// telegram-web-app.js грузим без блокировки: если telegram.org недоступен, страница всё равно откроется
+var inTg = /tgWebApp/.test(location.hash + location.search);
+function boot() {
+  if (boot.ran) return; boot.ran = true;
+  tg = window.Telegram && Telegram.WebApp && Telegram.WebApp.initData ? Telegram.WebApp : null;
+  if (tg) { tg.ready(); tg.expand(); }
+  cloud = tg && tg.CloudStorage && tg.isVersionAtLeast && tg.isVersionAtLeast("6.9") ? tg.CloudStorage : null;
+  fetch("data.json?v=" + Date.now()).then(function (r) { return r.json(); }).then(function (d) {
+    D = d;
+    loadState(function (s) { S = s; home(); });
+  }).catch(function (e) { render([el("div", {class: "card", text: "Couldn't load data: " + e.message})]); });
+}
+var sc = document.createElement("script");
+sc.src = "https://telegram.org/js/telegram-web-app.js";
+sc.onload = sc.onerror = boot;
+document.head.appendChild(sc);
+setTimeout(boot, inTg ? 8000 : 2500);
 </script>
 </body>
 </html>
